@@ -65,4 +65,10 @@
       block topic
     </description>
   </class>
+  <class name="jsk_topic_tools/SynchronizedImageThrottle" type="SynchronizedImageThrottle"
+         base_class_type="nodelet::Nodelet">
+    <description>
+      throttle image topics with synchronized
+    </description>
+  </class>
 </library>

@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   image_transport
   message_generation
+  message_filters
   nodelet
   roscpp
   rostime
@@ -32,6 +33,7 @@ add_service_files(
 )
 generate_dynamic_reconfigure_options(
   cfg/LightweightThrottle.cfg
+  cfg/SynchronizedImageThrottle.cfg
 )
 generate_messages()
 catkin_package(
@@ -90,6 +92,8 @@ jsk_topic_tools_nodelet(src/vital_checker_nodelet.cpp
   "jsk_topic_tools/VitalCheckerNodelet" "vital_checker")
 jsk_topic_tools_nodelet(src/string_relay_nodelet.cpp
   "jsk_topic_tools/StringRelay" "string_relay")
+jsk_topic_tools_nodelet(src/synchronized_image_throttle_nodelet.cpp
+  "jsk_topic_tools/SynchronizedImageThrottle" "synchronized_image_throttle")
 
 add_library(jsk_topic_tools SHARED
   ${jsk_topic_tools_nodelet_sources}
