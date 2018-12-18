@@ -1,0 +1,12 @@
+<launch>
+  <include file="$(find pr2_machine)/pr2.machine"/>
+
+  <node name="monitor_c1" pkg="jsk_topic_tools" type="comp_monitor.py"
+        machine="c1">
+    <remap from="~output" to="c1_status"/>
+  </node>
+  <node name="monitor_c2" pkg="jsk_topic_tools" type="comp_monitor.py"
+        machine="c2">
+    <remap from="~output" to="c2_status"/>
+  </node>
+</launch>
