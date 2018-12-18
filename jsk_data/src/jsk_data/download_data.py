@@ -97,8 +97,10 @@ def check_md5sum(path, md5):
     if md5 and len(md5) != 32:
         raise ValueError('md5 must be 32 charactors\n'
                          'actual: {} ({} charactors)'.format(md5, len(md5)))
-    print('[%s] Checking md5sum (%s)' % (path, md5))
-    is_same = hashlib.md5(open(path, 'rb').read()).hexdigest() == md5
+    path_md5 = hashlib.md5(open(path, 'rb').read()).hexdigest()
+    print('[%s] checking md5sum)' % path)
+    is_same = path_md5 == md5
+
     print('[%s] Finished checking md5sum' % path)
     return is_same
 
@@ -121,19 +123,32 @@ def _get_package_source_path(pkg_name):
 
 
 def download_data(pkg_name, path, url, md5, download_client=None,
-                  extract=False, compressed_bags=None, quiet=True, chmod=True):
+                  extract=False, compressed_bags=None, quiet=True, chmod=True,
+                  n_times=2):
     """Install test data checking md5 and rosbag decompress if needed.
        The downloaded data are located in cache_dir, and then linked to specified path.
-       cache_dir is set by environment variable `JSK_DATA_CACHE_DIR` if defined, set by ROS_HOME/data otherwise."""
+       cache_dir is set by environment variable `JSK_DATA_CACHE_DIR` if defined, set by ROS_HOME/data otherwise.
+       If download succeeded, return True, otherwise return False.
+    """
     if download_client is None:
         if is_google_drive_url(url):
             download_client = 'gdown'
         else:
             download_client = 'wget'
+    # cmd_exists
+    if not any(os.access(os.path.join(path, download_client), os.X_OK)
+               for path in os.environ["PATH"].split(os.pathsep)):
+        print('\033[31mDownload client [%s] is not found. Skipping download\033[0m' % download_client,
+              file=sys.stderr)
+        return True
     if compressed_bags is None:
         compressed_bags = []
     if not osp.isabs(path):
         pkg_path = _get_package_source_path(pkg_name)
+        if not pkg_path:
+            print('\033[31mPackage [%s] is not found in current workspace. Skipping download\033[0m' % pkg_name,
+                  file=sys.stderr)
+            return True
         path = osp.join(pkg_path, path)
     if not osp.exists(osp.dirname(path)):
         try:
@@ -160,22 +175,49 @@ def download_data(pkg_name, path, url, md5, download_client=None,
                 if not is_file_writable(cache_dir):
                     os.chmod(cache_dir, 0777)
     cache_file = osp.join(cache_dir, osp.basename(path))
+
     # check if cache exists, and update if necessary
-    if not (osp.exists(cache_file) and check_md5sum(cache_file, md5)):
+    # Try n_times download.
+    # https://github.com/jsk-ros-pkg/jsk_common/issues/1574
+    try_download_count = 0
+    while True:
         if osp.exists(cache_file):
-            os.remove(cache_file)
-        download(download_client, url, cache_file, quiet=quiet, chmod=chmod)
-    if osp.islink(path):
+            if check_md5sum(cache_file, md5):
+                break
+            else:
+                os.remove(cache_file)
+                download(download_client, url, cache_file, quiet=quiet,
+                         chmod=chmod)
+                try_download_count += 1
+                if try_download_count >= n_times:
+                    path_md5 = hashlib.md5(
+                        open(cache_file, 'rb').read()).hexdigest()
+                    print('\033[31m[%s] md5sum mismatched! '
+                          'expected: %s vs actual: %s\033[0m' %
+                          (cache_file, md5, path_md5), file=sys.stderr)
+                    return False
+        else:
+            if try_download_count >= n_times:
+                print('\033[31m[%s] could not download file. '
+                      'maximum download trial exceeded.\033[0m' %
+                      cache_file, file=sys.stderr)
+                return False
+            else:
+                download(download_client, url, cache_file, quiet=quiet,
+                         chmod=chmod)
+                try_download_count += 1
+
+    if osp.islink(path) and os.access(os.path.dirname(path), os.W_OK):
         # overwrite the link
         os.remove(path)
         os.symlink(cache_file, path)
-    elif not osp.exists(path):
+    elif not osp.exists(path) and os.access(os.path.dirname(path), os.W_OK):
         os.symlink(cache_file, path)  # create link
     else:
         # not link and exists so skipping
-        print('[%s] File exists, so skipping creating symlink.' % path,
+        print('\033[33m[%s] File exists or not writable, so skipping creating symlink.\033[0m' % path,
               file=sys.stderr)
-        return
+        return True
     if extract:
         # extract files in cache dir and create symlink for them
         extracted_files = extract_file(cache_file, to_directory=cache_dir, chmod=True)
@@ -194,3 +236,4 @@ def download_data(pkg_name, path, url, md5, download_client=None,
             pkg_path = _get_package_source_path(pkg_name)
             compressed_bag = osp.join(pkg_path, compressed_bag)
         decompress_rosbag(compressed_bag, quiet=quiet, chmod=chmod)
+    return True
