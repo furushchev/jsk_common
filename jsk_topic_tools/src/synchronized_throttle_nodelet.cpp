@@ -147,6 +147,7 @@ void SynchronizedThrottle::checkAdvertisedTimerCallback(const ros::WallTimerEven
   }
   if (advertised_)
   {
+    NODELET_INFO("All topics are now published and synchronized");
     check_timer_.stop();
   }
 }
