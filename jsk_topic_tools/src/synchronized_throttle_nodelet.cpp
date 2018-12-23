@@ -97,7 +97,7 @@ void SynchronizedThrottle::onInit()
   {
     check_timer_ = pnh_->createWallTimer(
         ros::WallDuration(5), &SynchronizedThrottle::checkAdvertisedTimerCallback,
-        this, false);
+        this, /* oneshot= */false);
   }
 }
 
@@ -142,7 +142,7 @@ void SynchronizedThrottle::checkAdvertisedTimerCallback(const ros::WallTimerEven
   {
     if (!pub_[i])
     {
-      ROS_WARN_STREAM(input_topics_[i] << " is not yet published");
+      NODELET_WARN_STREAM(input_topics_[i] << " is not yet published");
     }
   }
   if (advertised_)
