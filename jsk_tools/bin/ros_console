@@ -1,0 +1,144 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+from collections import OrderedDict
+import click
+import os
+import readline
+import rospy
+try:
+    from shutil import get_terminal_size
+except ImportError:
+    from shutil_backports import get_terminal_size
+try:
+    import queue
+except ImportError:
+    import Queue as queue
+
+from rosgraph_msgs.msg import Log
+
+
+LOGLEVELS=OrderedDict([(Log.DEBUG, 'DEBUG'),
+                       (Log.INFO, 'INFO'),
+                       (Log.WARN, 'WARN'),
+                       (Log.ERROR, 'ERROR'),
+                       (Log.FATAL, 'FATAL')])
+COLORS=['green', 'reset', 'yellow', 'red', 'red']
+
+
+def canonical_name(name):
+    if not name.startswith('/'):
+        name = '/' + name
+    return name
+
+
+class LogFormatter(object):
+    def __init__(self, msg):
+        assert isinstance(msg, Log)
+        self.msg = msg
+
+    @property
+    def severity(self):
+        return LOGLEVELS[self.msg.level]
+
+    @property
+    def time(self):
+        return '%09.09f' % self.msg.header.stamp.to_sec()
+
+    @property
+    def walltime(self):
+        return '%09.09f' % time.time()
+
+    @property
+    def message(self):
+        return self.msg.msg
+
+    @property
+    def node(self):
+        return self.msg.name
+
+    @property
+    def line(self):
+        return self.msg.line
+
+    @property
+    def function(self):
+        return self.msg.function
+
+    @property
+    def file(self):
+        return self.msg.file
+
+    @property
+    def logger(self):
+        return ""
+
+    @property
+    def thread(self):
+        return ""
+
+
+
+class ROSConsole(object):
+    def __init__(self, level, whitelists, blacklists):
+        super(ROSConsole, self).__init__()
+        self.level = level
+        self.whitelists = [canonical_name(n) for n in whitelists]
+        self.blacklists = [canonical_name(n) for n in blacklists]
+        self.queue = queue.Queue(10000)
+        self.log_format = self.get_format()
+
+        self.sub_rosout = rospy.Subscriber('/rosout', Log, self.log_callback)
+        self.timer = rospy.Timer(rospy.Duration(0.1), self.timer_callback)
+
+    def get_format(self):
+        fmt = os.getenv('ROSCONSOLE_FORMAT', '[${severity}] [${time}] [${node}] ${message}')
+        return fmt.replace('${', '{0.')
+
+    def print_log(self, msg, cols):
+        formatter = LogFormatter(msg)
+        text = self.log_format.format(formatter)
+        fg = COLORS[LOGLEVELS.keys().index(msg.level)]
+        dim = msg.level == Log.FATAL
+        click.secho(text=text[:cols], fg=fg, dim=dim)
+
+    def filter_message(self, msg):
+        ok = msg.level >= self.level
+        if self.whitelists:
+            ok = ok and msg.name in self.whitelists
+        if self.blacklists:
+            ok = ok and msg.name not in self.blacklists
+        return ok
+
+    def log_callback(self, msg):
+        try:
+            self.queue.put(msg, timeout=10)
+        except queue.Full:
+            pass
+
+    def timer_callback(self, event=None):
+        cols, lines = get_terminal_size()
+        while not rospy.is_shutdown():
+            try:
+                msg = self.queue.get(block=False)
+                if self.filter_message(msg):
+                    self.print_log(msg, cols)
+            except queue.Empty:
+                break
+
+
+@click.command(help='Like RQT Console but for CUI environment',
+               context_settings={'help_option_names': ['--help', '-h']})
+@click.option('--node', '-n', multiple=True, help='Filter messages by node name')
+@click.option('--exclude-node', '-N', multiple=True, help='Ignore messages from node')
+@click.option('--level', '-l', type=click.Choice(LOGLEVELS.values()), default='INFO',
+              help='Filter messages by level')
+def main(node, exclude_node, level):
+    rospy.init_node('ros_console', anonymous=True)
+    level = LOGLEVELS.keys()[LOGLEVELS.values().index(level)]
+    console = ROSConsole(level, node, exclude_node)
+    rospy.spin()
+
+
+if __name__ == '__main__':
+    main()
