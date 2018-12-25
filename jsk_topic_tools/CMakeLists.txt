@@ -25,7 +25,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 catkin_python_setup()
 add_message_files(
-  FILES TopicInfo.msg
+  FILES TopicInfo.msg ComputerStatus.msg
 )
 add_service_files(
   FILES List.srv Update.srv ChangeTopic.srv PassthroughDuration.srv
@@ -35,7 +35,8 @@ generate_dynamic_reconfigure_options(
   cfg/StealthRelay.cfg
   cfg/SynchronizedThrottle.cfg
 )
-generate_messages()
+generate_messages(
+  DEPENDENCIES std_msgs)
 catkin_package(
     DEPENDS
     CATKIN_DEPENDS topic_tools message_runtime nodelet std_msgs std_srvs roscpp rostime
