@@ -89,7 +89,10 @@ class ROSConsole(object):
         self.log_format = self.get_format()
 
         self.sub_rosout = rospy.Subscriber('/rosout', Log, self.log_callback)
-        self.timer = rospy.Timer(rospy.Duration(0.1), self.timer_callback)
+        try:
+            self.timer = rospy.Timer(rospy.Duration(0.1), self.timer_callback, reset=True)
+        except:
+            self.timer = rospy.Timer(rospy.Duration(0.1), self.timer_callback)
 
     def get_format(self):
         fmt = os.getenv('ROSCONSOLE_FORMAT', '[${severity}] [${time}] [${node}] ${message}')
