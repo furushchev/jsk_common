@@ -5,3 +5,8 @@ float32[] cpu_user
 float32[] cpu_nice
 float32[] cpu_system
 float32[] cpu_idle
+float32 cpu_all_usage
+float32 cpu_all_user
+float32 cpu_all_nice
+float32 cpu_all_system
+float32 cpu_all_idle
